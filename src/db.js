@@ -84,10 +84,24 @@ function addMessage(chatId, role, content) {
   save();
   return msg;
 }
+function updateMessage(messageId, content) {
+  const m = data.messages.find(x => x.id === messageId);
+  if (!m) return { ok: false };
+  m.content = content;
+  m.edited_at = new Date().toISOString();
+  save();
+  return { ok: true, message: m };
+}
+function deleteMessage(messageId) {
+  const before = data.messages.length;
+  data.messages = data.messages.filter(m => m.id !== messageId);
+  save();
+  return { ok: data.messages.length < before };
+}
 
 module.exports = {
   init,
   findUserByUsername, findUserById, insertUser, updateUser,
   listChats, createChat, renameChat, deleteChat,
-  getMessages, addMessage
+  getMessages, addMessage, updateMessage, deleteMessage
 };
