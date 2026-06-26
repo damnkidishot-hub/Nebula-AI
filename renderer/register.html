@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nebula AI - Sign up</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="brand"><div class="logo"></div><h1>Create account</h1></div>
+      <form id="form">
+        <div class="field"><label>Username</label><input id="username" type="text" required /></div>
+        <div class="field"><label>Password</label><input id="password" type="password" required /></div>
+        <button class="btn-primary" type="submit">Continue</button>
+        <div class="error" id="error"></div>
+      </form>
+      <p class="swap">Already have an account? <a href="login.html">Log in</a></p>
+    </div>
+  </div>
+  <script src="js/icons.js"></script>
+  <script src="js/titlebar.js"></script>
+  <script src="js/auth.js"></script>
+  <script>initRegister();</script>
+</body>
+</html>

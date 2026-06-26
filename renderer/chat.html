@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nebula AI</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="top">
+        <div class="brand">
+          <div class="logo"></div><h1>Nebula AI</h1>
+          <button class="collapse-btn" id="collapseBtn" title="Toggle sidebar" data-icon="menu"></button>
+        </div>
+        <button class="new-chat" id="newChat"><span data-icon="plus"></span>New chat</button>
+      </div>
+      <div class="chat-list" id="chatList"></div>
+      <button class="theme-toggle" id="themeToggle"><span class="ico"></span><span class="lbl">Dark mode</span></button>
+      <div class="profile" id="profileBtn">
+        <div class="avatar" id="avatar">U</div>
+        <div class="meta"><b id="profileName">User</b></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="topbar"><button class="expand-btn" id="expandBtn" title="Open sidebar" data-icon="menu"></button></div>
+      <div class="messages" id="messages"></div>
+      <div class="composer">
+        <div class="box">
+          <div class="input-row">
+            <textarea id="input" rows="1" placeholder="Message Nebula AI"></textarea>
+          </div>
+          <div class="toolbar">
+            <div class="switcher" id="modelSwitcher">
+              <button class="pill"><span class="pill-ico" data-icon="cpu"></span><span id="modelLabel">Select model</span> <span class="caret" data-icon="chevron"></span></button>
+              <div class="menu up" id="modelMenu"></div>
+            </div>
+            <div class="switcher" id="modeSwitcher">
+              <button class="pill"><span class="pill-ico" data-icon="bolt"></span><span id="modeLabel">Normal</span> <span class="caret" data-icon="chevron"></span></button>
+              <div class="menu up" id="modeMenu">
+                <div data-mode="normal" class="sel">Normal</div>
+                <div data-mode="agent">Agent</div>
+              </div>
+            </div>
+            <button class="pill toggle-pill" id="approvalToggle" title="Approvals" style="display:none"><span class="pill-ico" data-icon="lock"></span><span class="lbl">Ask first</span></button>
+            <button class="send-btn" id="sendBtn"></button>
+          </div>
+        </div>
+        <div class="cap-warn" id="capWarn" style="display:none"><span data-icon="bolt"></span> This model may not support tool calling. For agent mode use an OpenRouter tool-capable model.</div>
+        <div class="disclaimer">Nebula AI can make mistakes. Check important info.</div>
+      </div>
+    </main>
+  </div>
+  <div class="modal" id="profileModal">
+    <div class="card">
+      <h3>Profile &amp; settings</h3>
+      <div class="field"><label>Display name</label><input id="editName" type="text" /></div>
+      <div class="field"><label>Avatar image URL</label><input id="editAvatar" type="text" placeholder="https://..." /></div>
+      <div class="row">
+        <button class="btn-ghost" id="logoutBtn">Log out</button>
+        <button class="btn-primary" id="saveProfile">Save</button>
+      </div>
+    </div>
+  </div>
+  <script src="js/icons.js"></script>
+  <script src="js/titlebar.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/highlight.js"></script>
+  <script src="js/markdown.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>
