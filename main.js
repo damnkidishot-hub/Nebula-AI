@@ -74,6 +74,8 @@ ipcMain.handle('chat:rename', (e, { chatId, title }) => db.renameChat(chatId, ti
 ipcMain.handle('chat:delete', (e, { chatId }) => db.deleteChat(chatId));
 ipcMain.handle('chat:messages', (e, { chatId }) => db.getMessages(chatId));
 ipcMain.handle('chat:addMessage', (e, { chatId, role, content }) => db.addMessage(chatId, role, content));
+ipcMain.handle('chat:editMessage', (e, { messageId, content }) => db.updateMessage(messageId, content));
+ipcMain.handle('chat:deleteMessage', (e, { messageId }) => db.deleteMessage(messageId));
 
 /* ---------------- INFERENCE (streaming) ---------------- */
 ipcMain.handle('infer:send', async (e, payload) => {
