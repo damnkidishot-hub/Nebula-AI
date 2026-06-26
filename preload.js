@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('api', {
   deleteChat: (data) => ipcRenderer.invoke('chat:delete', data),
   getMessages: (data) => ipcRenderer.invoke('chat:messages', data),
   addMessage: (data) => ipcRenderer.invoke('chat:addMessage', data),
+  editMessage: (data) => ipcRenderer.invoke('chat:editMessage', data),
+  deleteMessage: (data) => ipcRenderer.invoke('chat:deleteMessage', data),
 
   // inference streaming
   send: (payload) => ipcRenderer.invoke('infer:send', payload),
