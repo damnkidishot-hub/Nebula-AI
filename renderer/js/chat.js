@@ -124,27 +124,153 @@ function renderMessages(){
     return;
   }
   box.innerHTML = '';
-  state.messages.forEach(m => box.appendChild(messageRow(m.role, m.content)));
+  state.messages.forEach(m => box.appendChild(messageRow(m.role, m.content, m.id)));
   scrollDown();
 }
 
-function messageRow(role, content){
+// Build the per-message action bar (copy / edit / delete). Buttons reference the
+// message by its stored id; rows without an id yet (e.g. a streaming reply) only
+// get the bar once persisted via attachMessageId().
+function messageActions(){
+  const bar = document.createElement('div');
+  bar.className = 'msg-actions';
+  bar.innerHTML =
+    `<button class="msg-act" data-act="copy" title="Copy" aria-label="Copy message">${window.ICONS ? window.ICONS.copy : 'Copy'}</button>`+
+    `<button class="msg-act" data-act="edit" title="Edit" aria-label="Edit message">${window.ICONS ? window.ICONS.edit : 'Edit'}</button>`+
+    `<button class="msg-act danger" data-act="delete" title="Delete" aria-label="Delete message">${window.ICONS ? window.ICONS.trash : 'Delete'}</button>`;
+  return bar;
+}
+
+function messageRow(role, content, id){
   const row = document.createElement('div');
   row.className = 'msg-row ' + (role === 'user' ? 'user' : 'ai');
+  if (id != null) row.dataset.id = id;
+  row.dataset.role = role;
+
   const av = document.createElement('div');
   av.className = 'av';
   av.innerHTML = role === 'user' ? (user.displayName||'U')[0].toUpperCase() : '&#9883;';
+
+  const content_wrap = document.createElement('div');
+  content_wrap.className = 'msg-body';
+
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   bubble.innerHTML = role === 'user' ? `<p>${escapeHtml(content)}</p>` : renderMarkdown(content);
-  row.appendChild(av); row.appendChild(bubble);
+
+  const actions = messageActions();
+  bindMessageActions(row, actions);
+
+  content_wrap.appendChild(bubble);
+  content_wrap.appendChild(actions);
+  row.appendChild(av);
+  row.appendChild(content_wrap);
   return row;
+}
+
+// Locate a message in state by its stored id.
+function findMessage(id){ return state.messages.find(m => String(m.id) === String(id)); }
+
+// Attach the persisted id to a row that was created before the message was saved
+// (streaming/agent replies start id-less, then gain an id on done/final).
+function attachMessageId(row, id){
+  if (!row || id == null) return;
+  row.dataset.id = id;
+}
+
+function bindMessageActions(row, bar){
+  bar.querySelector('[data-act="copy"]').onclick = () => copyMessage(row, bar);
+  bar.querySelector('[data-act="edit"]').onclick = () => startEditMessage(row);
+  bar.querySelector('[data-act="delete"]').onclick = () => deleteMessageRow(row);
+}
+
+async function copyMessage(row, bar){
+  const id = row.dataset.id;
+  const msg = findMessage(id);
+  const text = msg ? msg.content : (row.querySelector('.bubble')?.innerText || '');
+  try { await navigator.clipboard.writeText(text); }
+  catch (_) { return; }
+  const btn = bar.querySelector('[data-act="copy"]');
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.classList.add('copied');
+  btn.innerHTML = window.ICONS ? window.ICONS.check : 'Copied';
+  setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = original; }, 1200);
+}
+
+// Inline edit: swap the bubble for a textarea with Save / Cancel. Works for both
+// user and AI messages; AI content re-renders as markdown after saving.
+function startEditMessage(row){
+  if (row.classList.contains('editing')) return;
+  const id = row.dataset.id;
+  const msg = findMessage(id);
+  const role = row.dataset.role;
+  const current = msg ? msg.content : (row.querySelector('.bubble')?.innerText || '');
+  const bubble = row.querySelector('.bubble');
+  if (!bubble) return;
+
+  row.classList.add('editing');
+  const editor = document.createElement('div');
+  editor.className = 'msg-editor';
+  editor.innerHTML =
+    `<textarea class="msg-edit-input" rows="1"></textarea>`+
+    `<div class="msg-edit-btns">`+
+    `<button class="msg-edit-cancel">Cancel</button>`+
+    `<button class="msg-edit-save">Save</button>`+
+    `</div>`;
+  bubble.style.display = 'none';
+  bubble.insertAdjacentElement('afterend', editor);
+
+  const ta = editor.querySelector('.msg-edit-input');
+  ta.value = current;
+  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 320) + 'px'; };
+  ta.addEventListener('input', autosize);
+  autosize();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  const cleanup = () => { editor.remove(); bubble.style.display = ''; row.classList.remove('editing'); };
+
+  editor.querySelector('.msg-edit-cancel').onclick = cleanup;
+  editor.querySelector('.msg-edit-save').onclick = async () => {
+    const next = ta.value.trim();
+    if (!next){ cleanup(); return; }
+    if (id != null){
+      try { await window.api.editMessage({ messageId: Number(id), content: next }); }
+      catch (e) { console.error('editMessage failed:', e); }
+    }
+    if (msg) msg.content = next;
+    bubble.innerHTML = role === 'user' ? `<p>${escapeHtml(next)}</p>` : renderMarkdown(next);
+    cleanup();
+  };
+
+  // Ctrl/Cmd+Enter saves, Escape cancels.
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape'){ e.preventDefault(); cleanup(); }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); editor.querySelector('.msg-edit-save').click(); }
+  });
+}
+
+async function deleteMessageRow(row){
+  const id = row.dataset.id;
+  if (!confirm('Delete this message? This cannot be undone.')) return;
+  if (id != null){
+    try { await window.api.deleteMessage({ messageId: Number(id) }); }
+    catch (e) { console.error('deleteMessage failed:', e); }
+    state.messages = state.messages.filter(m => String(m.id) !== String(id));
+  }
+  row.classList.add('removing');
+  setTimeout(() => {
+    row.remove();
+    if (!state.messages.length) renderMessages();
+  }, 180);
 }
 
 function scrollDown(){ const b = $('messages'); b.scrollTop = b.scrollHeight; }
 
 let currentRequest = null;
 let currentBubble = null;
+let currentRow = null;
 let currentBuffer = '';
 
 function bindStreaming(){
@@ -158,8 +284,9 @@ function bindStreaming(){
     if (requestId !== currentRequest || !currentBubble) return;
     const final = content || currentBuffer;
     currentBubble.innerHTML = renderMarkdown(final);
-    await window.api.addMessage({ chatId: state.chatId, role: 'assistant', content: final });
-    state.messages.push({ role: 'assistant', content: final });
+    const saved = await window.api.addMessage({ chatId: state.chatId, role: 'assistant', content: final });
+    state.messages.push({ id: saved && saved.id, role: 'assistant', content: final });
+    if (saved && saved.id != null) attachMessageId(currentRow, saved.id);
     finishStreaming();
   });
   window.api.onError(({ requestId, error }) => {
@@ -172,7 +299,7 @@ function bindStreaming(){
 function finishStreaming(){
   if (currentBubble) currentBubble.classList.remove('streaming');
   setGenerating(false);
-  currentRequest = null; currentBubble = null; currentBuffer = '';
+  currentRequest = null; currentBubble = null; currentRow = null; currentBuffer = '';
 }
 
 function setGenerating(on){
@@ -196,6 +323,7 @@ function stopGenerating(){
     agentContainer = null;
   }
   currentRequest = null;
+  currentRow = null;
   setGenerating(false);
 }
 
@@ -210,10 +338,10 @@ async function send(){
   input.value = ''; input.style.height = 'auto';
 
   const wasEmpty = state.messages.length === 0;
-  state.messages.push({ role: 'user', content: text });
-  await window.api.addMessage({ chatId: state.chatId, role: 'user', content: text });
+  const savedUser = await window.api.addMessage({ chatId: state.chatId, role: 'user', content: text });
+  state.messages.push({ id: savedUser && savedUser.id, role: 'user', content: text });
   if (wasEmpty) renderMessages();
-  else $('messages').appendChild(messageRow('user', text));
+  else $('messages').appendChild(messageRow('user', text, savedUser && savedUser.id));
 
   const convo = state.messages.map(m => ({ role: m.role, content: m.content }));
   currentRequest = Date.now() + '-' + Math.random().toString(16).slice(2);
@@ -225,6 +353,7 @@ async function send(){
   const aiRow = messageRow('assistant', '');
   aiRow.querySelector('.bubble').innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
   $('messages').appendChild(aiRow);
+  currentRow = aiRow;
   currentBubble = aiRow.querySelector('.bubble');
   currentBubble.classList.add('streaming');
   scrollDown();
@@ -234,21 +363,30 @@ async function send(){
 
 /* ---------------- AGENT TURN ---------------- */
 let agentContainer = null;
+let agentRow = null;
 
 function runAgentTurn(convo){
   reasonBuffer = '';
   const row = document.createElement('div');
   row.className = 'msg-row ai';
+  row.dataset.role = 'assistant';
   row.innerHTML = `<div class="av">${window.ICONS ? window.ICONS.spark : ''}</div>`;
+  const content_wrap = document.createElement('div');
+  content_wrap.className = 'msg-body';
   const body = document.createElement('div');
   body.className = 'bubble';
   // reasoning (live) + steps (hidden until a tool runs) + final answer
   body.innerHTML = '<div class="agent-reason" hidden></div>'+
     '<div class="agent-steps" hidden></div>'+
     '<div class="agent-final"><div class="typing"><span></span><span></span><span></span></div></div>';
-  row.appendChild(body);
+  const actions = messageActions();
+  bindMessageActions(row, actions);
+  content_wrap.appendChild(body);
+  content_wrap.appendChild(actions);
+  row.appendChild(content_wrap);
   $('messages').appendChild(row);
   agentContainer = body;
+  agentRow = row;
   scrollDown();
 
   window.api.runAgent({
@@ -337,9 +475,10 @@ function bindAgent(){
     const text = content || reasonBuffer || '';
     if (reason){ reason.hidden = true; reason.innerHTML = ''; }
     agentContainer.querySelector('.agent-final').innerHTML = text ? renderMarkdown(text) : '';
-    await window.api.addMessage({ chatId: state.chatId, role: 'assistant', content: text });
-    state.messages.push({ role: 'assistant', content: text });
-    agentContainer = null; reasonBuffer = '';
+    const saved = await window.api.addMessage({ chatId: state.chatId, role: 'assistant', content: text });
+    state.messages.push({ id: saved && saved.id, role: 'assistant', content: text });
+    if (saved && saved.id != null) attachMessageId(agentRow, saved.id);
+    agentContainer = null; agentRow = null; reasonBuffer = '';
     setGenerating(false);
     scrollDown();
   });
@@ -347,7 +486,7 @@ function bindAgent(){
   window.api.onAgentError(({ requestId, error }) => {
     if (requestId !== currentRequest || !agentContainer) return;
     agentContainer.querySelector('.agent-final').innerHTML = `<p style="color:var(--danger)">Agent error: ${escapeHtml(error)}</p>`;
-    agentContainer = null;
+    agentContainer = null; agentRow = null;
     setGenerating(false);
   });
 }
