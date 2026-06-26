@@ -142,9 +142,8 @@ input,textarea{font-family:inherit;outline:none}
 .chat-list .section-label{font-size:12px;color:var(--muted);padding:8px 10px 4px;font-weight:600;letter-spacing:.3px}
 .chat-item{padding:9px 11px;border-radius:10px;color:var(--text-soft);font-size:14px;margin-bottom:2px;
   cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:background var(--t-fast),color var(--t-fast),padding-left var(--t-fast);white-space:nowrap;overflow:hidden;animation:slideIn var(--t-med) var(--ease) both}
-.chat-item:hover{padding-left:14px}
 @keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
-.chat-item:hover{background:var(--sidebar-hover);color:var(--text)}
+.chat-item:hover{padding-left:14px;background:var(--sidebar-hover);color:var(--text)}
 .chat-item.active{background:var(--surface-2);color:var(--text)}
 .chat-item>span:first-child{overflow:hidden;text-overflow:ellipsis}
 .chat-item .del{opacity:0;color:var(--muted);font-size:17px;padding-left:8px;transition:opacity .12s,color .12s}
@@ -172,8 +171,7 @@ input,textarea{font-family:inherit;outline:none}
 .switcher .menu.up{bottom:48px;left:0}
 .switcher.open .menu{display:block}
 .switcher .menu div{padding:11px 11px;border-radius:9px;font-size:14px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background var(--t-fast),padding-left var(--t-fast)}
-.switcher .menu div:hover{padding-left:14px}
-.switcher .menu div:hover{background:var(--surface-2)}
+.switcher .menu div:hover{padding-left:14px;background:var(--surface-2)}
 .switcher .menu div.sel::after{content:"\2713";margin-left:auto;color:var(--accent);font-weight:700}
 .dot{display:none}
 
@@ -185,7 +183,12 @@ input,textarea{font-family:inherit;outline:none}
 .msg-row.user{justify-content:flex-end}
 .msg-row.user .av{display:none}
 .msg-row.ai .av{background:linear-gradient(145deg,#13b48c,#0c7d61);box-shadow:0 2px 10px rgba(16,163,127,.35)}
-.msg-row.user .bubble{background:var(--user-bubble);border:1px solid var(--border);border-radius:20px;padding:11px 16px;max-width:75%;flex:0 1 auto}
+
+/* message body wraps the bubble + its action bar so they stack and align together */
+.msg-body{display:flex;flex-direction:column;gap:4px;min-width:0;max-width:100%}
+.msg-row.ai .msg-body{flex:1}
+.msg-row.user .msg-body{align-items:flex-end;max-width:75%}
+.msg-row.user .bubble{background:var(--user-bubble);border:1px solid var(--border);border-radius:20px;padding:11px 16px;max-width:100%;flex:0 1 auto}
 .bubble{line-height:1.72;font-size:16px;overflow-wrap:anywhere}
 .msg-row.ai .bubble{flex:1;padding-top:3px}
 .bubble p{margin:0 0 14px}
@@ -231,9 +234,8 @@ input,textarea{font-family:inherit;outline:none}
   color:var(--text-soft);font-size:13.5px;font-weight:500;transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast),transform var(--t-fast)}
 .pill:hover{background:var(--surface-2);border-color:var(--composer-focus);color:var(--text);transform:translateY(-1px)}
 .pill:active{transform:translateY(0)}
-.pill .pill-ico{font-size:14px;opacity:.9}
+.pill .pill-ico{display:flex;font-size:14px;opacity:.9}
 .pill .caret{display:flex;opacity:.6;transition:transform var(--t-fast) var(--ease)}
-.pill .pill-ico{display:flex}
 .pill .icon{width:15px;height:15px}
 .send-btn .icon{width:18px;height:18px}
 .theme-toggle .ico{display:flex}.theme-toggle .ico .icon{width:16px;height:16px}
@@ -309,3 +311,39 @@ input,textarea{font-family:inherit;outline:none}
 .empty .logo{display:none}
 .empty h2{color:var(--text);font-size:30px;font-weight:600;letter-spacing:-.5px;margin-bottom:0}
 .empty p{display:none}
+
+/* ---------- PER-MESSAGE ACTIONS (copy / edit / delete) ---------- */
+/* The bar sits just under each bubble. Hidden until the row is hovered or
+   focused, so it stays out of the way during reading but is keyboard-reachable. */
+.msg-actions{display:flex;gap:2px;opacity:0;transform:translateY(-2px);pointer-events:none;
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease)}
+.msg-row.user .msg-actions{justify-content:flex-end}
+.msg-row:hover .msg-actions,
+.msg-row:focus-within .msg-actions,
+.msg-row.editing .msg-actions{opacity:1;transform:none;pointer-events:auto}
+.msg-act{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;
+  color:var(--muted);transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast)}
+.msg-act:hover{background:var(--surface-2);color:var(--text)}
+.msg-act:active{transform:scale(.9)}
+.msg-act.danger:hover{background:rgba(224,72,77,.12);color:var(--danger)}
+.msg-act.copied{color:var(--accent)}
+.msg-act .icon{width:16px;height:16px}
+/* keep keyboard focus visible (quality floor) */
+.msg-act:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* row removal animation on delete */
+.msg-row.removing{opacity:0;transform:translateY(-6px);transition:opacity .18s var(--ease),transform .18s var(--ease)}
+
+/* ---------- INLINE MESSAGE EDITOR ---------- */
+.msg-editor{display:flex;flex-direction:column;gap:8px;width:100%}
+.msg-row.user .msg-editor{align-items:stretch;min-width:min(520px,70vw)}
+.msg-edit-input{width:100%;background:var(--composer);border:1px solid var(--composer-focus);border-radius:14px;
+  color:var(--text);font-size:16px;line-height:1.6;padding:12px 14px;resize:none;max-height:320px;
+  transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.msg-edit-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.msg-edit-btns{display:flex;gap:8px;justify-content:flex-end}
+.msg-edit-btns button{padding:7px 16px;border-radius:9px;font-size:13px;font-weight:600;
+  transition:transform var(--t-fast),opacity var(--t-fast),background var(--t-fast)}
+.msg-edit-btns button:hover{transform:translateY(-1px)}
+.msg-edit-save{background:var(--accent);color:#fff}
+.msg-edit-cancel{background:var(--surface);border:1px solid var(--border);color:var(--text)}
