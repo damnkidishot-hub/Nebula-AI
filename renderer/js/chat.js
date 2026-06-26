@@ -198,8 +198,8 @@ async function copyMessage(row, bar){
   setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = original; }, 1200);
 }
 
-// Inline edit: swap the bubble for a textarea with Save / Cancel. Works for both
-// user and AI messages; AI content re-renders as markdown after saving.
+// Inline edit: swap the bubble for a textarea with Save / Cancel.
+// Option B: editing a USER message regenerates a new assistant reply from that point.
 function startEditMessage(row){
   if (row.classList.contains('editing')) return;
   const id = row.dataset.id;
@@ -231,7 +231,7 @@ function startEditMessage(row){
 
   const cleanup = () => { editor.remove(); bubble.style.display = ''; row.classList.remove('editing'); };
 
-  editor.querySelector('.msg-edit-cancel').onclick = cleanup;
+  editor.querySelector('.msg-edit-cancel').onclick = () => { cleanup(); try { $('input').focus(); } catch (_) {} };
   editor.querySelector('.msg-edit-save').onclick = async () => {
     const next = ta.value.trim();
     if (!next){ cleanup(); return; }
@@ -242,11 +242,16 @@ function startEditMessage(row){
     if (msg) msg.content = next;
     bubble.innerHTML = role === 'user' ? `<p>${escapeHtml(next)}</p>` : renderMarkdown(next);
     cleanup();
+    // Option B: regen from edited USER message
+    if (role === 'user' && id != null){
+      try { await regenerateFromUserMessage(id); } catch (e) { console.error('regen failed:', e); unlockUI(); }
+    }
+    try { $('input').focus(); } catch (_) {}
   };
 
   // Ctrl/Cmd+Enter saves, Escape cancels.
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape'){ e.preventDefault(); cleanup(); }
+    if (e.key === 'Escape'){ e.preventDefault(); cleanup(); try { $('input').focus(); } catch (_) {} }
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); editor.querySelector('.msg-edit-save').click(); }
   });
 }
@@ -272,6 +277,16 @@ let currentRequest = null;
 let currentBubble = null;
 let currentRow = null;
 let currentBuffer = '';
+
+// If something goes wrong, never leave the UI stuck.
+function unlockUI(){
+  try { finishStreaming(); } catch (_) {}
+  try { setGenerating(false); } catch (_) {}
+}
+
+// Global safety net: any uncaught error should not "brick" the composer.
+window.addEventListener('error', () => unlockUI());
+window.addEventListener('unhandledrejection', () => unlockUI());
 
 function bindStreaming(){
   window.api.onToken(({ requestId, token }) => {
@@ -334,21 +349,63 @@ async function send(){
   if (!text) return;
   if (!state.model){ alert('Select a model first (add json files to /models)'); return; }
 
-  await ensureChat(text);
-  input.value = ''; input.style.height = 'auto';
+  try {
+    await ensureChat(text);
+    input.value = ''; input.style.height = 'auto';
 
-  const wasEmpty = state.messages.length === 0;
-  const savedUser = await window.api.addMessage({ chatId: state.chatId, role: 'user', content: text });
-  state.messages.push({ id: savedUser && savedUser.id, role: 'user', content: text });
-  if (wasEmpty) renderMessages();
-  else $('messages').appendChild(messageRow('user', text, savedUser && savedUser.id));
+    const wasEmpty = state.messages.length === 0;
+    const savedUser = await window.api.addMessage({ chatId: state.chatId, role: 'user', content: text });
+    state.messages.push({ id: savedUser && savedUser.id, role: 'user', content: text });
+    if (wasEmpty) renderMessages();
+    else $('messages').appendChild(messageRow('user', text, savedUser && savedUser.id));
+
+    const convo = state.messages.map(m => ({ role: m.role, content: m.content }));
+    currentRequest = Date.now() + '-' + Math.random().toString(16).slice(2);
+    currentBuffer = '';
+    setGenerating(true);
+
+    if (state.mode === 'agent') { runAgentTurn(convo); return; }
+
+    const aiRow = messageRow('assistant', '');
+    aiRow.querySelector('.bubble').innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+    $('messages').appendChild(aiRow);
+    currentRow = aiRow;
+    currentBubble = aiRow.querySelector('.bubble');
+    currentBubble.classList.add('streaming');
+    scrollDown();
+
+    await window.api.send({ requestId: currentRequest, modelName: state.model, mode: state.mode, messages: convo });
+  } catch (e) {
+    console.error('send failed:', e);
+    unlockUI();
+  }
+}
+
+// Regenerate from an edited user message (Option B):
+// - Keep messages up to the edited user message
+// - Delete everything after it (DB + UI)
+// - Generate a fresh assistant reply from the truncated conversation
+async function regenerateFromUserMessage(messageId){
+  const id = Number(messageId);
+  if (!id || !state.chatId) return;
+  const idx = state.messages.findIndex(m => Number(m.id) === id);
+  if (idx < 0) return;
+
+  const keep = state.messages.slice(0, idx + 1);
+  const removed = state.messages.slice(idx + 1);
+
+  for (const m of removed){
+    if (!m || m.id == null) continue;
+    try { await window.api.deleteMessage({ messageId: Number(m.id) }); } catch (e) { console.error('deleteMessage failed:', e); }
+  }
+
+  state.messages = keep;
+  renderMessages();
 
   const convo = state.messages.map(m => ({ role: m.role, content: m.content }));
   currentRequest = Date.now() + '-' + Math.random().toString(16).slice(2);
   currentBuffer = '';
   setGenerating(true);
-
-  if (state.mode === 'agent') { runAgentTurn(convo); return; }
 
   const aiRow = messageRow('assistant', '');
   aiRow.querySelector('.bubble').innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
@@ -358,7 +415,7 @@ async function send(){
   currentBubble.classList.add('streaming');
   scrollDown();
 
-  await window.api.send({ requestId: currentRequest, modelName: state.model, mode: state.mode, messages: convo });
+  await window.api.send({ requestId: currentRequest, modelName: state.model, mode: 'normal', messages: convo });
 }
 
 /* ---------------- AGENT TURN ---------------- */
@@ -554,6 +611,13 @@ function bindUI(){
   input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
   $('sendBtn').onclick = () => { if (state.streaming) stopGenerating(); else send(); };
+
+  // Clicking anywhere in the message list should not steal focus from the composer.
+  $('messages').addEventListener('click', (e) => {
+    if (e.target.closest('.msg-editor')) return;
+    const input = $('input');
+    if (input) input.focus();
+  });
 
   $('profileBtn').onclick = () => $('profileModal').classList.add('open');
   $('profileModal').onclick = (e) => { if (e.target.id === 'profileModal') e.currentTarget.classList.remove('open'); };
