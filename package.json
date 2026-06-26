@@ -1,0 +1,19 @@
+{
+  "name": "nebula-ai",
+  "version": "1.0.0",
+  "description": "Nebula AI - Electron + Node.js AI chatbot with OpenRouter & local GGUF models",
+  "main": "main.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "local-models": "npm install node-llama-cpp@latest"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "node-llama-cpp": "^3.18.1"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}
